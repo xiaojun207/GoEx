@@ -394,6 +394,8 @@ func (bnWs *BinanceWs) exitHandler(c *WsConn) {
 
 	for {
 		select {
+		case <-c.CloseChan():
+			return
 		case t := <-pingTicker.C:
 			c.SendPingMessage([]byte(strconv.Itoa(int(t.UnixNano() / int64(time.Millisecond)))))
 		case t := <-pongTicker.C:

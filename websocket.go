@@ -360,13 +360,17 @@ func (ws *WsConn) receiveMessage() {
 	}
 }
 
+func (ws *WsConn) CloseChan() chan bool {
+	return ws.close
+}
+
 func (ws *WsConn) CloseWs() {
-	//ws.close <- true
-	close(ws.close)
-	close(ws.writeBufferChan)
-	close(ws.closeMessageBufferChan)
-	close(ws.pingMessageBufferChan)
-	close(ws.pongMessageBufferChan)
+	ws.close <- true
+	//close(ws.close)
+	//close(ws.writeBufferChan)
+	//close(ws.closeMessageBufferChan)
+	//close(ws.pingMessageBufferChan)
+	//close(ws.pongMessageBufferChan)
 
 	err := ws.c.Close()
 	if err != nil {
