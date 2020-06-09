@@ -6,20 +6,21 @@ import (
 )
 
 type Order struct {
-	Price      float64
-	Amount     float64
-	AvgPrice   float64
-	DealAmount float64
-	Fee        float64
-	Cid        string //客户端自定义ID
-	OrderID2   string
-	OrderID    int //deprecated
-	OrderTime  int
-	Status     TradeStatus
-	Currency   CurrencyPair
-	Side       TradeSide
-	Type       string //limit / market
-	OrderType  int    //0:default,1:maker,2:fok,3:ioc
+	Price        float64
+	Amount       float64
+	AvgPrice     float64
+	DealAmount   float64
+	Fee          float64
+	Cid          string //客户端自定义ID
+	OrderID2     string
+	OrderID      int //deprecated
+	Status       TradeStatus
+	Currency     CurrencyPair
+	Side         TradeSide
+	Type         string //limit / market
+	OrderType    int    //0:default,1:maker,2:fok,3:ioc
+	OrderTime    int    // create  timestamp
+	FinishedTime int64  //finished timestamp
 }
 
 type Trade struct {
@@ -75,7 +76,7 @@ type Ticker struct {
 type FutureTicker struct {
 	*Ticker
 	ContractType string  `json:"omitempty"`
-	ContractId   int     `json:"contractId"`
+	ContractId   string  `json:"contractId"`
 	LimitHigh    float64 `json:"limitHigh,string"`
 	LimitLow     float64 `json:"limitLow,string"`
 	HoldAmount   float64 `json:"hold_amount,string"`
@@ -102,7 +103,8 @@ func (dr DepthRecords) Less(i, j int) bool {
 }
 
 type Depth struct {
-	ContractType string //for future
+	ContractType string `json:"contract_type,omitempty"` //for futures
+	ContractId   string `json:"contract_id,omitempty"`   // for futures
 	Pair         CurrencyPair
 	UTime        time.Time
 	AskList      DepthRecords // Descending order
@@ -164,6 +166,7 @@ type FutureOrder struct {
 	LeverRate    int     //倍数
 	Fee          float64 //手续费
 	ContractName string
+	FinishedTime int64 // finished timestamp
 }
 
 type FuturePosition struct {
@@ -202,8 +205,8 @@ type TickSize struct {
 type FuturesContractInfo struct {
 	*TickSize
 	ContractVal  float64 //合约面值(美元)
-	Delivery     string //交割日期
-	ContractType string //	本周 this_week 次周 next_week 季度 quarter
+	Delivery     string  //交割日期
+	ContractType string  //	本周 this_week 次周 next_week 季度 quarter
 }
 
 //api parameter struct
