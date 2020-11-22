@@ -24,10 +24,10 @@ func New(client *http.Client, accesskey, secretkey string) *Jbex {
 	return &Jbex{client: client, accesskey: accesskey, secretkey: secretkey}
 }
 
-func (g *Jbex) LimitBuy(amount, price string, currency CurrencyPair) (*Order, error) {
+func (g *Jbex) LimitBuy(amount, price string, currency CurrencyPair, opt ...LimitOrderOptionalParameter) (*Order, error) {
 	panic("not implement")
 }
-func (g *Jbex) LimitSell(amount, price string, currency CurrencyPair) (*Order, error) {
+func (g *Jbex) LimitSell(amount, price string, currency CurrencyPair, opt ...LimitOrderOptionalParameter) (*Order, error) {
 	panic("not implement")
 }
 func (g *Jbex) MarketBuy(amount, price string, currency CurrencyPair) (*Order, error) {

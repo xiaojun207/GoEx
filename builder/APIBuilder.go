@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/nntaoli-project/goex/jbex"
 
 	. "github.com/nntaoli-project/goex"
 	"github.com/nntaoli-project/goex/bigone"
@@ -242,6 +243,8 @@ func (builder *APIBuilder) Build(exName string) (api API) {
 		_api = hitbtc.New(builder.client, builder.apiKey, builder.secretkey)
 	case ATOP:
 		_api = atop.New(builder.client, builder.apiKey, builder.secretkey)
+	case JBEX:
+		_api = jbex.New(builder.client, builder.apiKey, builder.secretkey)
 	default:
 		println("exchange name error [" + exName + "].")
 
