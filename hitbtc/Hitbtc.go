@@ -33,7 +33,7 @@ const (
 var (
 	YCC     = goex.Currency{"YCC", "Yuan Chain New"}
 	BTC     = goex.Currency{"BTC", "Bitcoin"}
-	YCC_BTC = goex.CurrencyPair{YCC, BTC}
+	YCC_BTC = goex.CurrencyPair{CurrencyA: YCC, CurrencyB: BTC}
 )
 
 type Hitbtc struct {
@@ -214,11 +214,11 @@ func (hitbtc *Hitbtc) placeOrder(ty goex.TradeSide, amount, price string, curren
 	return hitbtc.toOrder(resp), nil
 }
 
-func (hitbtc *Hitbtc) LimitBuy(amount, price string, currency goex.CurrencyPair) (*goex.Order, error) {
+func (hitbtc *Hitbtc) LimitBuy(amount, price string, currency goex.CurrencyPair, opt ...goex.LimitOrderOptionalParameter) (*goex.Order, error) {
 	return hitbtc.placeOrder(goex.BUY, amount, price, currency)
 }
 
-func (hitbtc *Hitbtc) LimitSell(amount, price string, currency goex.CurrencyPair) (*goex.Order, error) {
+func (hitbtc *Hitbtc) LimitSell(amount, price string, currency goex.CurrencyPair, opt ...goex.LimitOrderOptionalParameter) (*goex.Order, error) {
 	return hitbtc.placeOrder(goex.SELL, amount, price, currency)
 }
 
@@ -587,7 +587,7 @@ func parseStatus(s string) goex.TradeStatus {
 }
 
 func (hitbtc *Hitbtc) adaptCurrencyPair(pair goex.CurrencyPair) goex.CurrencyPair {
-	return pair.AdaptUsdtToUsd().AdaptBccToBch()
+	return pair.AdaptUsdtToUsd()
 }
 
 func (hitbtc *Hitbtc) adaptSymbolToCurrencyPair(pair string) goex.CurrencyPair {

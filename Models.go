@@ -119,7 +119,7 @@ type APIConfig struct {
 	ApiPassphrase string //for okex.com v3 api
 	ClientId      string //for bitstamp.net , huobi.pro
 
-	Lever int //杠杆倍数 , for future
+	Lever float64 //杠杆倍数 , for future
 }
 
 type Kline struct {
@@ -163,10 +163,14 @@ type FutureOrder struct {
 	Currency     CurrencyPair
 	OrderType    int     //ORDINARY=0 POST_ONLY=1 FOK= 2 IOC= 3
 	OType        int     //1：开多 2：开空 3：平多 4： 平空
-	LeverRate    int     //倍数
+	LeverRate    float64 //倍数
 	Fee          float64 //手续费
 	ContractName string
 	FinishedTime int64 // finished timestamp
+
+	//策略委托单
+	TriggerPrice float64
+	AlgoType     int //1:限价 2:市场价；触发价格类型，默认是限价；为市场价时，委托价格不必填；
 }
 
 type FuturePosition struct {
@@ -175,17 +179,21 @@ type FuturePosition struct {
 	BuyPriceAvg    float64
 	BuyPriceCost   float64
 	BuyProfitReal  float64
+	BuyProfit      float64
 	CreateDate     int64
-	LeverRate      int
+	LeverRate      float64
 	SellAmount     float64
 	SellAvailable  float64
 	SellPriceAvg   float64
 	SellPriceCost  float64
 	SellProfitReal float64
+	SellProfit     float64
 	Symbol         CurrencyPair //btc_usd:比特币,ltc_usd:莱特币
 	ContractType   string
 	ContractId     int64
 	ForceLiquPrice float64 //预估爆仓价
+	ShortPnlRatio  float64 //空仓收益率
+	LongPnlRatio   float64 //多仓收益率
 }
 
 type HistoricalFunding struct {
@@ -220,4 +228,36 @@ type BorrowParameter struct {
 type RepaymentParameter struct {
 	BorrowParameter
 	BorrowId string
+}
+
+type TransferParameter struct {
+	Currency       string  `json:"currency"`
+	From           int     `json:"from"`
+	To             int     `json:"to"`
+	Amount         float64 `json:"amount"`
+	SubAccount     string  `json:"sub_account"`
+	InstrumentId   string  `json:"instrument_id"`
+	ToInstrumentId string  `json:"to_instrument_id"`
+}
+
+type WithdrawParameter struct {
+	Currency    string  `json:"currency"`
+	Amount      float64 `json:"amount,string"`
+	Destination int     `json:"destination"` //提币到(2:OKCoin国际 3:OKEx 4:数字货币地址)
+	ToAddress   string  `json:"to_address"`
+	TradePwd    string  `json:"trade_pwd"`
+	Fee         string  `json:"fee"`
+}
+
+type DepositWithdrawHistory struct {
+	WithdrawalId string    `json:"withdrawal_id,omitempty"`
+	Currency     string    `json:"currency"`
+	Txid         string    `json:"txid"`
+	Amount       float64   `json:"amount,string"`
+	From         string    `json:"from,omitempty"`
+	To           string    `json:"to"`
+	Memo         string    `json:"memo,omitempty"`
+	Fee          string    `json:"fee"`
+	Status       int       `json:"status,string"`
+	Timestamp    time.Time `json:"timestamp"`
 }

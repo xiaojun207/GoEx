@@ -97,6 +97,21 @@ func (bitstamp *Bitstamp) GetAccount() (*Account, error) {
 		Amount:       ToFloat64(respmap["bch_available"]),
 		ForzenAmount: ToFloat64(respmap["bch_reserved"]),
 		LoanAmount:   0}
+	acc.SubAccounts[GBP] = SubAccount{
+		Currency:     GBP,
+		Amount:       ToFloat64(respmap["gbp_available"]),
+		ForzenAmount: ToFloat64(respmap["gbp_reserved"]),
+		LoanAmount:   0}
+	acc.SubAccounts[PAX] = SubAccount{
+		Currency:     PAX,
+		Amount:       ToFloat64(respmap["pax_available"]),
+		ForzenAmount: ToFloat64(respmap["pax_reserved"]),
+		LoanAmount:   0}
+	acc.SubAccounts[XLM] = SubAccount{
+		Currency:     XLM,
+		Amount:       ToFloat64(respmap["xlm_available"]),
+		ForzenAmount: ToFloat64(respmap["xlm_reserved"]),
+		LoanAmount:   0}
 	return &acc, nil
 }
 
@@ -159,11 +174,11 @@ func (bitstamp *Bitstamp) placeMarketOrder(side string, pair CurrencyPair, amoun
 	return bitstamp.placeOrder(side, pair, amount, "", urlStr)
 }
 
-func (bitstamp *Bitstamp) LimitBuy(amount, price string, currency CurrencyPair) (*Order, error) {
+func (bitstamp *Bitstamp) LimitBuy(amount, price string, currency CurrencyPair, opt ...LimitOrderOptionalParameter) (*Order, error) {
 	return bitstamp.placeLimitOrder("buy", currency, amount, price)
 }
 
-func (bitstamp *Bitstamp) LimitSell(amount, price string, currency CurrencyPair) (*Order, error) {
+func (bitstamp *Bitstamp) LimitSell(amount, price string, currency CurrencyPair, opt ...LimitOrderOptionalParameter) (*Order, error) {
 	return bitstamp.placeLimitOrder("sell", currency, amount, price)
 }
 

@@ -31,15 +31,19 @@ func TestOKExSwap_GetFutureUserinfo(t *testing.T) {
 }
 
 func TestOKExSwap_PlaceFutureOrder(t *testing.T) {
-	t.Log(okExSwap.PlaceFutureOrder(goex.XRP_USD, goex.SWAP_CONTRACT, "0.2", "10", goex.OPEN_BUY, 0, 0))
+	t.Log(okExSwap.PlaceFutureOrder(goex.BTC_USDT, goex.SWAP_CONTRACT, "10000", "1", goex.OPEN_BUY, 0, 0))
+}
+
+func TestOKExSwap_PlaceFutureOrder2(t *testing.T) {
+	t.Log(okExSwap.PlaceFutureOrder2(goex.BTC_USDT, goex.SWAP_CONTRACT, "10000", "1", goex.OPEN_BUY, 0, goex.Ioc))
 }
 
 func TestOKExSwap_FutureCancelOrder(t *testing.T) {
-	t.Log(okExSwap.FutureCancelOrder(goex.XRP_USD, goex.SWAP_CONTRACT, "309935122485305344"))
+	t.Log(okExSwap.FutureCancelOrder(goex.BTC_USDT, goex.SWAP_CONTRACT, "309935122485305344"))
 }
 
 func TestOKExSwap_GetFutureOrder(t *testing.T) {
-	t.Log(okExSwap.GetFutureOrder("309935122485305344", goex.XRP_USD, goex.SWAP_CONTRACT))
+	t.Log(okExSwap.GetFutureOrder("581084124456583168", goex.BTC_USDT, goex.SWAP_CONTRACT))
 }
 
 func TestOKExSwap_GetFuturePosition(t *testing.T) {
@@ -96,4 +100,28 @@ func TestOKExSwap_GetMarginLevel(t *testing.T) {
 
 func TestOKExSwap_GetFutureAccountInfo(t *testing.T) {
 	t.Log(okExSwap.GetFutureAccountInfo(goex.BTC_USDT))
+}
+
+func TestOKExSwap_PlaceFutureAlgoOrder(t *testing.T) {
+	ord := &goex.FutureOrder{
+		ContractName: goex.SWAP_CONTRACT,
+		Currency:     goex.BTC_USD,
+		OType:        2, //开空
+		OrderType:    1, //1：止盈止损 2：跟踪委托 3：冰山委托 4：时间加权
+		Price:        9877,
+		Amount:       1,
+
+		TriggerPrice: 9877,
+		AlgoType:     1,
+	}
+	t.Log(okExSwap.PlaceFutureAlgoOrder(ord))
+}
+
+func TestOKExSwap_FutureCancelAlgoOrder(t *testing.T) {
+	t.Log(okExSwap.FutureCancelAlgoOrder(goex.BTC_USD, []string{"309935122485305344"}))
+
+}
+
+func TestOKExSwap_GetFutureAlgoOrders(t *testing.T) {
+	t.Log(okExSwap.GetFutureAlgoOrders("", "2", goex.BTC_USD))
 }
