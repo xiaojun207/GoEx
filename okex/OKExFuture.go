@@ -4,11 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
 	. "github.com/nntaoli-project/goex"
 	"github.com/nntaoli-project/goex/internal/logger"
 )
@@ -81,11 +79,27 @@ func (ok *OKExFuture) GetAllFutureContractInfo() ([]FutureContractInfo, error) {
 }
 
 func (ok *OKExFuture) GetContractInfo(contractId string) (*FutureContractInfo, error) {
+	now := time.Now()
+	if len(ok.allContractInfo.contractInfos) == 0 ||
+		(ok.allContractInfo.uTime.Hour() < 16 && now.Hour() == 16 && now.Minute() <= 10) {
+		ok.Lock()
+		defer ok.Unlock()
+
+		infos, err := ok.GetAllFutureContractInfo()
+		if err != nil {
+			logger.Errorf("Get All Futures Contract Infos Error=%s", err)
+		} else {
+			ok.allContractInfo.contractInfos = infos
+			ok.allContractInfo.uTime = now
+		}
+	}
+
 	for _, itm := range ok.allContractInfo.contractInfos {
 		if itm.InstrumentID == contractId {
 			return &itm, nil
 		}
 	}
+
 	return nil, errors.New("unknown contract id " + contractId)
 }
 
@@ -101,7 +115,7 @@ func (ok *OKExFuture) GetFutureContractId(pair CurrencyPair, contractAlias strin
 	hour := now.Hour()
 	minute := now.Minute()
 
-	if ok.allContractInfo.uTime.IsZero() || (hour == 16 && minute <= 11) {
+	if ok.allContractInfo.uTime.IsZero() || (ok.allContractInfo.uTime.Hour() < 16 && hour == 16 && minute <= 11) {
 		ok.Lock()
 		defer ok.Unlock()
 
@@ -357,7 +371,7 @@ func (ok *OKExFuture) PlaceFutureOrder2(matchPrice int, ord *FutureOrder) (*Futu
 		return nil, errors.New("ord param is nil")
 	}
 	param.InstrumentId = ok.GetFutureContractId(ord.Currency, ord.ContractName)
-	param.ClientOid = strings.Replace(uuid.New().String(), "-", "", 32)
+	param.ClientOid = GenerateOrderClientId(32)
 	param.Type = ord.OType
 	param.OrderType = ord.OrderType
 	param.Price = ok.normalizePrice(ord.Price, ord.Currency)
@@ -385,43 +399,47 @@ func (ok *OKExFuture) PlaceFutureOrder2(matchPrice int, ord *FutureOrder) (*Futu
 	return ord, nil
 }
 
-func (ok *OKExFuture) PlaceFutureOrder(currencyPair CurrencyPair, contractType, price, amount string, openType, matchPrice, leverRate int) (string, error) {
-	urlPath := "/api/futures/v3/order"
-	var param struct {
-		ClientOid    string `json:"client_oid"`
-		InstrumentId string `json:"instrument_id"`
-		Type         string `json:"type"`
-		OrderType    string `json:"order_type"`
-		Price        string `json:"price"`
-		Size         string `json:"size"`
-		MatchPrice   string `json:"match_price"`
-		Leverage     string `json:"leverage"`
+func (ok *OKExFuture) PlaceFutureOrder(currencyPair CurrencyPair, contractType, price, amount string, openType, matchPrice int, leverRate float64) (string, error) {
+	fOrder, err := ok.PlaceFutureOrder2(matchPrice, &FutureOrder{
+		Price:        ToFloat64(price),
+		Amount:       ToFloat64(amount),
+		OType:        openType,
+		ContractName: contractType,
+		Currency:     currencyPair,
+	})
+	return fOrder.OrderID2, err
+}
+
+func (ok *OKExFuture) LimitFuturesOrder(currencyPair CurrencyPair, contractType, price, amount string, openType int, opt ...LimitOrderOptionalParameter) (*FutureOrder, error) {
+	ord := &FutureOrder{
+		Currency:     currencyPair,
+		Price:        ToFloat64(price),
+		Amount:       ToFloat64(amount),
+		OType:        openType,
+		ContractName: contractType,
 	}
 
-	var response struct {
-		Result       bool   `json:"result"`
-		ErrorMessage string `json:"error_message"`
-		ErrorCode    string `json:"error_code"`
-		ClientOid    string `json:"client_oid"`
-		OrderId      string `json:"order_id"`
+	if len(opt) > 0 {
+		switch opt[0] {
+		case PostOnly:
+			ord.OrderType = 1
+		case Fok:
+			ord.OrderType = 2
+		case Ioc:
+			ord.OrderType = 3
+		}
 	}
 
-	param.InstrumentId = ok.GetFutureContractId(currencyPair, contractType)
-	param.ClientOid = strings.Replace(uuid.New().String(), "-", "", 32)
-	param.Type = fmt.Sprint(openType)
-	param.OrderType = "0"
-	param.Price = price
-	param.Size = amount
-	param.MatchPrice = fmt.Sprint(matchPrice)
-	param.Leverage = fmt.Sprint(leverRate)
+	return ok.PlaceFutureOrder2(0, ord)
+}
 
-	reqBody, _, _ := ok.BuildRequestBody(param)
-	err := ok.DoRequest("POST", urlPath, reqBody, &response)
-	if err != nil {
-		return "", err
-	}
-
-	return response.OrderId, nil
+func (ok *OKExFuture) MarketFuturesOrder(currencyPair CurrencyPair, contractType, amount string, openType int) (*FutureOrder, error) {
+	return ok.PlaceFutureOrder2(1, &FutureOrder{
+		Currency:     currencyPair,
+		Amount:       ToFloat64(amount),
+		OType:        openType,
+		ContractName: contractType,
+	})
 }
 
 func (ok *OKExFuture) FutureCancelOrder(currencyPair CurrencyPair, contractType, orderId string) (bool, error) {
@@ -455,7 +473,7 @@ func (ok *OKExFuture) GetFuturePosition(currencyPair CurrencyPair, contractType 
 			LongPnlRatio         float64   `json:"long_pnl_ratio,string"`
 			LongUnrealisedPnl    float64   `json:"long_unrealised_pnl,string"`
 			RealisedPnl          float64   `json:"realised_pnl,string"`
-			Leverage             int       `json:"leverage,string"`
+			Leverage             float64   `json:"leverage,string"`
 			ShortQty             float64   `json:"short_qty,string"`
 			ShortAvailQty        float64   `json:"short_avail_qty,string"`
 			ShortAvgCost         float64   `json:"short_avg_cost,string"`
@@ -502,6 +520,8 @@ func (ok *OKExFuture) GetFuturePosition(currencyPair CurrencyPair, contractType 
 			ForceLiquPrice: pos.LiquidationPrice,
 			LeverRate:      pos.Leverage,
 			CreateDate:     pos.CreatedAt.Unix(),
+			ShortPnlRatio:  pos.ShortPnlRatio,
+			LongPnlRatio:   pos.LongPnlRatio,
 		})
 	}
 
@@ -607,9 +627,9 @@ func (ok *OKExFuture) GetDeliveryTime() (int, int, int, int) {
 /**
   since : 单位秒,开始时间
 */
-func (ok *OKExFuture) GetKlineRecords(contract_type string, currency CurrencyPair, period, size, since int) ([]FutureKline, error) {
+func (ok *OKExFuture) GetKlineRecords(contractType string, currency CurrencyPair, period, size, since int) ([]FutureKline, error) {
 	urlPath := "/api/futures/v3/instruments/%s/candles?start=%s&granularity=%d"
-	contractId := ok.GetFutureContractId(currency, contract_type)
+	contractId := ok.GetFutureContractId(currency, contractType)
 	sinceTime := time.Unix(int64(since), 0).UTC()
 
 	if since/int(time.Second) != 1 { //如果不为秒，转为秒
@@ -645,7 +665,46 @@ func (ok *OKExFuture) GetKlineRecords(contract_type string, currency CurrencyPai
 	return klines, nil
 }
 
-func (ok *OKExFuture) GetTrades(contract_type string, currencyPair CurrencyPair, since int64) ([]Trade, error) {
+/**
+  since : 单位秒,开始时间
+  to : 单位秒,结束时间
+*/
+func (ok *OKExFuture) GetKlineRecordsByRange(contractType string, currency CurrencyPair, period, since, to int) ([]FutureKline, error) {
+	urlPath := "/api/futures/v3/instruments/%s/candles?start=%s&end=%s&granularity=%d"
+	contractId := ok.GetFutureContractId(currency, contractType)
+	sinceTime := time.Unix(int64(since), 0).UTC()
+	toTime := time.Unix(int64(to), 0).UTC()
+
+	granularity := adaptKLinePeriod(KlinePeriod(period))
+	if granularity == -1 {
+		return nil, errors.New("kline period parameter is error")
+	}
+
+	var response [][]interface{}
+	err := ok.DoRequest("GET", fmt.Sprintf(urlPath, contractId, sinceTime.Format(time.RFC3339), toTime.Format(time.RFC3339), granularity), "", &response)
+	if err != nil {
+		return nil, err
+	}
+
+	var klines []FutureKline
+	for _, itm := range response {
+		t, _ := time.Parse(time.RFC3339, fmt.Sprint(itm[0]))
+		klines = append(klines, FutureKline{
+			Kline: &Kline{
+				Timestamp: t.Unix(),
+				Pair:      currency,
+				Open:      ToFloat64(itm[1]),
+				High:      ToFloat64(itm[2]),
+				Low:       ToFloat64(itm[3]),
+				Close:     ToFloat64(itm[4]),
+				Vol:       ToFloat64(itm[5])},
+			Vol2: ToFloat64(itm[6])})
+	}
+
+	return klines, nil
+}
+
+func (ok *OKExFuture) GetTrades(contractType string, currencyPair CurrencyPair, since int64) ([]Trade, error) {
 	panic("")
 }
 

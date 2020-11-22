@@ -27,7 +27,7 @@ type OrderInfo struct {
 	OrderPriceType string  `json:"order_price_type"`
 	Direction      string  `json:"direction"`
 	Offset         string  `json:"offset"`
-	LeverRate      int     `json:"lever_rate"`
+	LeverRate      float64 `json:"lever_rate"`
 	OrderId        int64   `json:"order_id"`
 	ClientOrderId  int64   `json:"client_order_id"`
 	OrderSource    string  `json:"order_source"`
@@ -57,7 +57,7 @@ var (
 	FuturesContractInfos []FuturesContractInfo
 )
 
-func init() {
+func hbdmInit() {
 	go func() {
 		defer func() {
 			logger.Info("[hbdm] Get Futures Tick Size Finished.")
@@ -121,6 +121,10 @@ func NewHbdm(conf *APIConfig) *Hbdm {
 	if conf.Endpoint == "" {
 		conf.Endpoint = defaultBaseUrl
 	}
+	if conf.Lever <= 0 {
+		conf.Lever = 10
+	}
+	hbdmInit()
 	return &Hbdm{conf}
 }
 
@@ -180,7 +184,7 @@ func (dm *Hbdm) GetFuturePosition(currencyPair CurrencyPair, contractType string
 		ProfitRate     float64 `json:"profit_rate"`
 		Profit         float64 `json:"profit"`
 		PositionMargin float64 `json:"position_margin"`
-		LeverRate      int     `json:"lever_rate"`
+		LeverRate      float64 `json:"lever_rate"`
 		Direction      string  `json:"direction"`
 	}
 
@@ -195,38 +199,84 @@ func (dm *Hbdm) GetFuturePosition(currencyPair CurrencyPair, contractType string
 
 	//	log.Println(data)
 
-	var positions []FuturePosition
+	var (
+		positions   []FuturePosition
+		positionMap = make(map[string]FuturePosition, 1)
+	)
+
 	for _, d := range data {
+		if d.ContractType == "next_quarter" {
+			d.ContractType = BI_QUARTER_CONTRACT
+		}
+
+		if d.ContractType != contractType {
+			continue
+		}
+
+		pos := positionMap[d.ContractCode]
+		pos.ContractType = d.ContractType
+		pos.ContractId = int64(ToInt(d.ContractCode[3:]))
+		pos.Symbol = currencyPair
+
 		switch d.Direction {
 		case "buy":
-			positions = append(positions, FuturePosition{
-				ContractType:  contractType,
-				ContractId:    int64(ToInt(d.ContractCode[3:])),
-				Symbol:        currencyPair,
-				BuyAmount:     d.Volume,
-				BuyAvailable:  d.Available,
-				BuyPriceAvg:   d.CostOpen,
-				BuyPriceCost:  d.CostHold,
-				BuyProfitReal: d.ProfitRate,
-				LeverRate:     d.LeverRate})
+			//positions = append(positions, FuturePosition{
+			//	ContractType:  d.ContractType,
+			//	ContractId:    int64(ToInt(d.ContractCode[3:])),
+			//	Symbol:        currencyPair,
+			//	BuyAmount:     d.Volume,
+			//	BuyAvailable:  d.Available,
+			//	BuyPriceAvg:   d.CostOpen,
+			//	BuyPriceCost:  d.CostHold,
+			//	BuyProfitReal: d.ProfitRate,
+			//	BuyProfit:     d.Profit,
+			//	LeverRate:     d.LeverRate})
+			pos.BuyAmount = d.Volume
+			pos.BuyAvailable = d.Available
+			pos.BuyPriceAvg = d.CostOpen
+			pos.BuyPriceCost = d.CostHold
+			pos.BuyProfit = d.Profit
+			pos.BuyProfitReal = d.ProfitRate
+			pos.LeverRate = d.LeverRate
 		case "sell":
-			positions = append(positions, FuturePosition{
-				ContractType:   contractType,
-				ContractId:     int64(ToInt(d.ContractCode[3:])),
-				Symbol:         currencyPair,
-				SellAmount:     d.Volume,
-				SellAvailable:  d.Available,
-				SellPriceAvg:   d.CostOpen,
-				SellPriceCost:  d.CostHold,
-				SellProfitReal: d.ProfitRate,
-				LeverRate:      d.LeverRate})
+			//	positions = append(positions, FuturePosition{
+			//		ContractType:   d.ContractType,
+			//		ContractId:     int64(ToInt(d.ContractCode[3:])),
+			//		Symbol:         currencyPair,
+			//		SellAmount:     d.Volume,
+			//		SellAvailable:  d.Available,
+			//		SellPriceAvg:   d.CostOpen,
+			//		SellPriceCost:  d.CostHold,
+			//		SellProfitReal: d.ProfitRate,
+			//		SellProfit:     d.Profit,
+			//		LeverRate:      d.LeverRate})
+			pos.SellAmount = d.Volume
+			pos.SellAvailable = d.Available
+			pos.SellPriceAvg = d.CostOpen
+			pos.SellPriceCost = d.CostHold
+			pos.SellProfit = d.Profit
+			pos.SellProfitReal = d.ProfitRate
+			pos.LeverRate = d.LeverRate
+		}
+
+		positionMap[d.ContractCode] = pos
+	}
+
+	for _, pos := range positionMap {
+		if pos.BuyAmount > 0 || pos.SellAmount > 0 {
+			positions = append(positions, pos)
 		}
 	}
 
 	return positions, nil
 }
 
-func (dm *Hbdm) PlaceFutureOrder(currencyPair CurrencyPair, contractType, price, amount string, openType, matchPrice, leverRate int) (string, error) {
+func (dm *Hbdm) PlaceFutureOrder(currencyPair CurrencyPair, contractType, price, amount string, openType, matchPrice int, leverRate float64) (string, error) {
+	fOrder, err := dm.PlaceFutureOrder2(currencyPair, contractType, price, amount, openType, matchPrice, leverRate)
+	return fOrder.OrderID2, err
+}
+
+func (dm *Hbdm) PlaceFutureOrder2(currencyPair CurrencyPair, contractType, price, amount string, openType, matchPrice int, leverRate float64, opt ...LimitOrderOptionalParameter) (*FutureOrder, error) {
 	var data struct {
 		OrderId  int64 `json:"order_id"`
 		COrderId int64 `json:"client_order_id"`
@@ -235,6 +285,7 @@ func (dm *Hbdm) PlaceFutureOrder(currencyPair CurrencyPair, contractType, price,
 	params := &url.Values{}
 	path := "/api/v1/contract_order"
 
+	params.Add("client_order_id", fmt.Sprint(time.Now().UnixNano()))
 	params.Add("contract_type", contractType)
 	params.Add("symbol", currencyPair.CurrencyA.Symbol)
 	params.Add("volume", amount)
@@ -244,7 +295,18 @@ func (dm *Hbdm) PlaceFutureOrder(currencyPair CurrencyPair, contractType, price,
 	if matchPrice == 1 {
 		params.Set("order_price_type", "opponent") //对手价下单
 	} else {
-		params.Set("order_price_type", "limit")
+		orderPriceType := "limit"
+		if len(opt) > 0 {
+			switch opt[0] {
+			case Fok:
+				orderPriceType = "fok"
+			case Ioc:
+				orderPriceType = "ioc"
+			case PostOnly:
+				orderPriceType = "post_only"
+			}
+		}
+		params.Set("order_price_type", orderPriceType)
 		params.Add("price", dm.formatPriceSize(contractType, currencyPair.CurrencyA, price))
 	}
 
@@ -254,7 +316,30 @@ func (dm *Hbdm) PlaceFutureOrder(currencyPair CurrencyPair, contractType, price,
 
 	err := dm.doRequest(path, params, &data)
 
-	return fmt.Sprint(data.OrderId), err
+	fOrd := &FutureOrder{
+		ClientOid:    params.Get("client_order_id"),
+		ContractName: contractType,
+		Currency:     currencyPair,
+		Price:        ToFloat64(price),
+		Amount:       ToFloat64(amount),
+		OType:        openType,
+	}
+
+	if err != nil {
+		return fOrd, err
+	}
+
+	fOrd.OrderID2 = fmt.Sprint(data.OrderId)
+
+	return fOrd, err
+}
+
+func (dm *Hbdm) LimitFuturesOrder(currencyPair CurrencyPair, contractType, price, amount string, openType int, opt ...LimitOrderOptionalParameter) (*FutureOrder, error) {
+	return dm.PlaceFutureOrder2(currencyPair, contractType, price, amount, openType, 0, dm.config.Lever)
+}
+
+func (dm *Hbdm) MarketFuturesOrder(currencyPair CurrencyPair, contractType, amount string, openType int) (*FutureOrder, error) {
+	return dm.PlaceFutureOrder2(currencyPair, contractType, "0", amount, openType, 1, dm.config.Lever)
 }
 
 func (dm *Hbdm) FutureCancelOrder(currencyPair CurrencyPair, contractType, orderId string) (bool, error) {

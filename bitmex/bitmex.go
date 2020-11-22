@@ -119,7 +119,12 @@ type BitmexOrder struct {
 	Timestamp   time.Time `json:"timestamp"`
 }
 
-func (bm *bitmex) PlaceFutureOrder(currencyPair CurrencyPair, contractType, price, amount string, openType, matchPrice, leverRate int) (string, error) {
+func (bm *bitmex) PlaceFutureOrder(currencyPair CurrencyPair, contractType, price, amount string, openType, matchPrice int, leverRate float64) (string, error) {
+	fOrder, err := bm.PlaceFutureOrder2(currencyPair, contractType, price, amount, openType, matchPrice, leverRate)
+	return fOrder.OrderID2, err
+}
+
+func (bm *bitmex) PlaceFutureOrder2(currencyPair CurrencyPair, contractType, price, amount string, openType, matchPrice int, leverRate float64) (*FutureOrder, error) {
 	var createOrderParameter BitmexOrder
 
 	var resp struct {
@@ -150,13 +155,33 @@ func (bm *bitmex) PlaceFutureOrder(currencyPair CurrencyPair, contractType, pric
 	//	createOrderParameter.OrderQty = -ToInt(amount)
 	//}
 
+	fOrder := &FutureOrder{
+		ClientOid:    createOrderParameter.ClOrdID,
+		Currency:     currencyPair,
+		Price:        ToFloat64(price),
+		Amount:       ToFloat64(amount),
+		OType:        openType,
+		LeverRate:    leverRate,
+		ContractName: contractType,
+	}
+
 	err := bm.doAuthRequest("POST", "/api/v1/order", bm.toJson(createOrderParameter), &resp)
 
 	if err != nil {
-		return "", err
+		return fOrder, err
 	}
 
-	return resp.OrderId, nil
+	fOrder.OrderID2 = resp.OrderId
+
+	return fOrder, nil
+}
+
+func (bm *bitmex) LimitFuturesOrder(currencyPair CurrencyPair, contractType, price, amount string, openType int, opt ...LimitOrderOptionalParameter) (*FutureOrder, error) {
+	return bm.PlaceFutureOrder2(currencyPair, contractType, price, amount, openType, 0, 10)
+}
+
+func (bm *bitmex) MarketFuturesOrder(currencyPair CurrencyPair, contractType, amount string, openType int) (*FutureOrder, error) {
+	return bm.PlaceFutureOrder2(currencyPair, contractType, "0", amount, openType, 1, 10)
 }
 
 func (bm *bitmex) FutureCancelOrder(currencyPair CurrencyPair, contractType, orderId string) (bool, error) {
@@ -191,7 +216,7 @@ func (bm *bitmex) GetFuturePosition(currencyPair CurrencyPair, contractType stri
 			OpenOrderSellQty  float64   `json:"OpenOrderSellQty"`
 			OpeningTimestamp  time.Time `json:"openingTimestamp"`
 			LiquidationPrice  float64   `json:"liquidationPrice"`
-			Leverage          int       `json:"leverage"`
+			Leverage          float64   `json:"leverage"`
 		}
 		param = url.Values{}
 	)

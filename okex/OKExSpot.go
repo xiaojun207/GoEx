@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/go-openapi/errors"
 	. "github.com/nntaoli-project/goex"
+	"github.com/nntaoli-project/goex/internal/logger"
 	"sort"
 	"strings"
 	"time"
@@ -110,7 +111,7 @@ func (ok *OKExSpot) BatchPlaceOrders(orders []Order) ([]PlaceOrderResponse, erro
 func (ok *OKExSpot) PlaceOrder(ty string, ord *Order) (*Order, error) {
 	urlPath := "/api/spot/v3/orders"
 	param := PlaceOrderParam{
-		ClientOid:    ok.UUID(),
+		ClientOid:    GenerateOrderClientId(32),
 		InstrumentId: ord.Currency.AdaptUsdToUsdt().ToLower().ToSymbol("-"),
 	}
 
@@ -161,8 +162,12 @@ func (ok *OKExSpot) PlaceOrder(ty string, ord *Order) (*Order, error) {
 	return ord, nil
 }
 
-func (ok *OKExSpot) LimitBuy(amount, price string, currency CurrencyPair) (*Order, error) {
-	return ok.PlaceOrder("limit", &Order{
+func (ok *OKExSpot) LimitBuy(amount, price string, currency CurrencyPair, opt ...LimitOrderOptionalParameter) (*Order, error) {
+	ty := "limit"
+	if len(opt) > 0 {
+		ty = opt[0].String()
+	}
+	return ok.PlaceOrder(ty, &Order{
 		Price:    ToFloat64(price),
 		Amount:   ToFloat64(amount),
 		Currency: currency,
@@ -170,8 +175,12 @@ func (ok *OKExSpot) LimitBuy(amount, price string, currency CurrencyPair) (*Orde
 	})
 }
 
-func (ok *OKExSpot) LimitSell(amount, price string, currency CurrencyPair) (*Order, error) {
-	return ok.PlaceOrder("limit", &Order{
+func (ok *OKExSpot) LimitSell(amount, price string, currency CurrencyPair, opt ...LimitOrderOptionalParameter) (*Order, error) {
+	ty := "limit"
+	if len(opt) > 0 {
+		ty = opt[0].String()
+	}
+	return ok.PlaceOrder(ty, &Order{
 		Price:    ToFloat64(price),
 		Amount:   ToFloat64(amount),
 		Currency: currency,
@@ -205,9 +214,11 @@ func (ok *OKExSpot) CancelOrder(orderId string, currency CurrencyPair) (bool, er
 	}{currency.AdaptUsdToUsdt().ToLower().ToSymbol("-")}
 	reqBody, _, _ := ok.BuildRequestBody(param)
 	var response struct {
-		ClientOid string `json:"client_oid"`
-		OrderId   string `json:"order_id"`
-		Result    bool   `json:"result"`
+		ClientOid    string `json:"client_oid"`
+		OrderId      string `json:"order_id"`
+		Result       bool   `json:"result"`
+		ErrorCode    string `json:"error_code"`
+		ErrorMessage string `json:"error_message"`
 	}
 	err := ok.OKEx.DoRequest("POST", urlPath, reqBody, &response)
 	if err != nil {
@@ -216,7 +227,7 @@ func (ok *OKExSpot) CancelOrder(orderId string, currency CurrencyPair) (bool, er
 	if response.Result {
 		return true, nil
 	}
-	return false, errors.New(400, "cancel fail, unknown error")
+	return false, errors.New(400, fmt.Sprintf("cancel fail, %s", response.ErrorMessage))
 }
 
 type OrderResponse struct {
@@ -232,6 +243,7 @@ type OrderResponse struct {
 	FilledNotional string  `json:"filled_notional"`
 	PriceAvg       string  `json:"price_avg"`
 	State          int     `json:"state,string"`
+	Fee            string  `json:"fee"`
 	OrderType      int     `json:"order_type,string"`
 	Timestamp      string  `json:"timestamp"`
 }
@@ -244,7 +256,8 @@ func (ok *OKExSpot) adaptOrder(response OrderResponse) *Order {
 		Amount:     response.Size,
 		AvgPrice:   ToFloat64(response.PriceAvg),
 		DealAmount: ToFloat64(response.FilledSize),
-		Status:     ok.adaptOrderState(response.State)}
+		Status:     ok.adaptOrderState(response.State),
+		Fee:        ToFloat64(response.Fee)}
 
 	switch response.Side {
 	case "buy":
@@ -266,7 +279,7 @@ func (ok *OKExSpot) adaptOrder(response OrderResponse) *Order {
 	date, err := time.Parse(time.RFC3339, response.Timestamp)
 	//log.Println(date.Local().UnixNano()/int64(time.Millisecond))
 	if err != nil {
-		println(err)
+		logger.Error("parse timestamp err=", err, ",timestamp=", response.Timestamp)
 	} else {
 		ordInfo.OrderTime = int(date.UnixNano() / int64(time.Millisecond))
 	}
@@ -312,7 +325,21 @@ func (ok *OKExSpot) GetUnfinishOrders(currency CurrencyPair) ([]Order, error) {
 }
 
 func (ok *OKExSpot) GetOrderHistorys(currency CurrencyPair, currentPage, pageSize int) ([]Order, error) {
-	panic("unsupported")
+	urlPath := fmt.Sprintf("/api/spot/v3/orders?instrument_id=%s&state=7", currency.AdaptUsdToUsdt().ToSymbol("-"))
+	var response []OrderResponse
+	err := ok.OKEx.DoRequest("GET", urlPath, "", &response)
+	if err != nil {
+		return nil, err
+	}
+
+	var orders []Order
+	for _, itm := range response {
+		ord := ok.adaptOrder(itm)
+		ord.Currency = currency
+		orders = append(orders, *ord)
+	}
+
+	return orders, nil
 }
 
 func (ok *OKExSpot) GetExchangeName() string {
@@ -485,18 +512,20 @@ type OKExSpotSymbol struct {
 	QuoteCurrency   string
 	PricePrecision  float64
 	AmountPrecision float64
+	MinAmount       float64
+	MinValue        float64
 	SymbolPartition string
 	Symbol          string
 }
 
 func (ok *OKExSpot) GetCurrenciesPrecision() ([]OKExSpotSymbol, error) {
 	var response []struct {
-		InstrumentId  string `json:"instrument_id"`
-		BaseCurrency  string `json:"base_currency"`
-		QuoteCurrency string `json:"quote_currency"`
-		MinSize       string `json:"min_size"`
-		SizeIncrement string `json:"size_increment"`
-		TickSize      string `json:"tick_size"`
+		InstrumentId  string  `json:"instrument_id"`
+		BaseCurrency  string  `json:"base_currency"`
+		QuoteCurrency string  `json:"quote_currency"`
+		MinSize       float64 `json:"min_size,string"`
+		SizeIncrement string  `json:"size_increment"`
+		TickSize      string  `json:"tick_size"`
 	}
 	err := ok.DoRequest("GET", "/api/spot/v3/instruments", "", &response)
 	if err != nil {
@@ -505,11 +534,11 @@ func (ok *OKExSpot) GetCurrenciesPrecision() ([]OKExSpotSymbol, error) {
 
 	var Symbols []OKExSpotSymbol
 	for _, v := range response {
-
 		var sym OKExSpotSymbol
 		sym.BaseCurrency = v.BaseCurrency
 		sym.QuoteCurrency = v.QuoteCurrency
 		sym.Symbol = v.InstrumentId
+		sym.MinAmount = v.MinSize
 
 		pres := strings.Split(v.TickSize, ".")
 		if len(pres) == 1 {

@@ -55,6 +55,8 @@ type HuoBiProSymbol struct {
 	QuoteCurrency   string
 	PricePrecision  float64
 	AmountPrecision float64
+	MinAmount       float64
+	MinValue        float64
 	SymbolPartition string
 	Symbol          string
 }
@@ -108,7 +110,7 @@ func NewHuoBiProSpot(client *http.Client, apikey, secretkey string) *HuoBiPro {
 	accinfo, err := hb.GetAccountInfo(HB_SPOT_ACCOUNT)
 	if err != nil {
 		hb.accountId = ""
-		//panic(err)
+		panic(err)
 	} else {
 		hb.accountId = accinfo.Id
 		Log.Info("account state :", accinfo.State)
@@ -262,8 +264,21 @@ func (hbpro *HuoBiPro) placeOrder(amount, price string, pair CurrencyPair, order
 	return respmap["data"].(string), nil
 }
 
-func (hbpro *HuoBiPro) LimitBuy(amount, price string, currency CurrencyPair) (*Order, error) {
-	orderId, err := hbpro.placeOrder(amount, price, currency, "buy-limit")
+func (hbpro *HuoBiPro) LimitBuy(amount, price string, currency CurrencyPair, opt ...LimitOrderOptionalParameter) (*Order, error) {
+	orderTy := "buy-limit"
+	if len(opt) > 0 {
+		switch opt[0] {
+		case PostOnly:
+			orderTy = "buy-limit-maker"
+		case Ioc:
+			orderTy = "buy-ioc"
+		case Fok:
+			orderTy = "buy-limit-fok"
+		default:
+			Log.Error("limit order optional parameter error ,opt= ", opt[0])
+		}
+	}
+	orderId, err := hbpro.placeOrder(amount, price, currency, orderTy)
 	if err != nil {
 		return nil, err
 	}
@@ -276,8 +291,21 @@ func (hbpro *HuoBiPro) LimitBuy(amount, price string, currency CurrencyPair) (*O
 		Side:     BUY}, nil
 }
 
-func (hbpro *HuoBiPro) LimitSell(amount, price string, currency CurrencyPair) (*Order, error) {
-	orderId, err := hbpro.placeOrder(amount, price, currency, "sell-limit")
+func (hbpro *HuoBiPro) LimitSell(amount, price string, currency CurrencyPair, opt ...LimitOrderOptionalParameter) (*Order, error) {
+	orderTy := "sell-limit"
+	if len(opt) > 0 {
+		switch opt[0] {
+		case PostOnly:
+			orderTy = "sell-limit-maker"
+		case Ioc:
+			orderTy = "sell-ioc"
+		case Fok:
+			orderTy = "sell-limit-fok"
+		default:
+			Log.Error("limit order optional parameter error ,opt= ", opt[0])
+		}
+	}
+	orderId, err := hbpro.placeOrder(amount, price, currency, orderTy)
 	if err != nil {
 		return nil, err
 	}
@@ -742,6 +770,8 @@ func (hbpro *HuoBiPro) GetCurrenciesPrecision() ([]HuoBiProSymbol, error) {
 		sym.QuoteCurrency = _sym["quote-currency"].(string)
 		sym.PricePrecision = _sym["price-precision"].(float64)
 		sym.AmountPrecision = _sym["amount-precision"].(float64)
+		sym.MinAmount = _sym["min-order-amt"].(float64)
+		sym.MinValue = _sym["min-order-value"].(float64)
 		sym.SymbolPartition = _sym["symbol-partition"].(string)
 		sym.Symbol = _sym["symbol"].(string)
 		Symbols = append(Symbols, sym)

@@ -122,9 +122,15 @@ func (bnWs *BinanceWs) SubscribeDepth(pair CurrencyPair, size int) error {
 
 	handle := func(msg []byte) error {
 		rawDepth := struct {
-			LastUpdateID int64           `json:"T"`
-			Bids         [][]interface{} `json:"b"`
-			Asks         [][]interface{} `json:"a"`
+			// 现货
+			LastUpdateID int64           `json:"lastUpdateId"`
+			Bids         [][]interface{} `json:"bids"`
+			Asks         [][]interface{} `json:"asks"`
+
+			// 合约
+			FutureLastUpdateID int64           `json:"T"`
+			FutureBids         [][]interface{} `json:"b"`
+			FutureAsks         [][]interface{} `json:"a"`
 		}{}
 
 		err := json.Unmarshal(msg, &rawDepth)
@@ -132,7 +138,17 @@ func (bnWs *BinanceWs) SubscribeDepth(pair CurrencyPair, size int) error {
 			fmt.Println("json unmarshal error for ", string(msg))
 			return err
 		}
-		depth := bnWs.parseDepthData(rawDepth.Bids, rawDepth.Asks)
+
+		bids := rawDepth.Bids
+		asks := rawDepth.Asks
+		if bids == nil && rawDepth.FutureBids != nil {
+			bids = rawDepth.FutureBids
+		}
+		if asks == nil && rawDepth.FutureAsks != nil {
+			asks = rawDepth.FutureAsks
+		}
+
+		depth := bnWs.parseDepthData(bids, asks)
 		depth.Pair = pair
 		depth.UTime = time.Now()
 		bnWs.depthCallback(depth)
@@ -394,6 +410,8 @@ func (bnWs *BinanceWs) exitHandler(c *WsConn) {
 
 	for {
 		select {
+		case <-c.CloseChan():
+			return
 		case t := <-pingTicker.C:
 			c.SendPingMessage([]byte(strconv.Itoa(int(t.UnixNano() / int64(time.Millisecond)))))
 		case t := <-pongTicker.C:
