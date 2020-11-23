@@ -183,11 +183,46 @@ func (g *Jbex) GetKlineRecords(currency CurrencyPair, period, size, since int) (
 	return klines, nil
 }
 
+/**
+[
+	{
+		price: "0.19101",
+		time: 1606115698968,
+		qty: "21",
+		isBuyerMaker: false
+	},
+]
+*/
 //非个人，整个交易所的交易记录
 func (g *Jbex) GetTrades(currency CurrencyPair, since int64) ([]Trade, error) {
-	uri := fmt.Sprintf("%s/openapi/quote/v1/trades?symbol=%s", marketBaseUrl, currency.ToSymbol(""))
+	if since == 0 {
+		since = 30
+	}
+	uri := fmt.Sprintf("%s/openapi/quote/v1/trades?symbol=%s&limit=%d", marketBaseUrl, currency.ToSymbol(""), since)
 	log.Println("uri:", uri)
-	panic("not implement")
+	resp, err := HttpGet3(g.client, uri, map[string]string{})
+	if err != nil {
+		return nil, err
+	}
+
+	var trades []Trade
+	for _, v := range resp {
+		m := v.(map[string]interface{})
+		ty := SELL
+		if m["isBuyerMaker"].(bool) {
+			ty = BUY
+		}
+		trades = append(trades, Trade{
+			Tid:    ToInt64(m["id"]),
+			Type:   ty,
+			Amount: ToFloat64(m["qty"]),
+			Price:  ToFloat64(m["price"]),
+			Date:   ToInt64(m["time"]),
+			Pair:   currency,
+		})
+	}
+
+	return trades, nil
 }
 
 func (g *Jbex) GetExchangeName() string {

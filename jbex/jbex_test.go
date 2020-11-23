@@ -21,3 +21,9 @@ func Test_GetDepth(t *testing.T) {
 	t.Log("asks=>", dep.AskList)
 	t.Log("bids=>", dep.BidList)
 }
+
+func TestJbex_GetTrades(t *testing.T) {
+	res, err := jbex.GetTrades(goex.BTC_USDT, 10)
+	t.Log("err=>", err)
+	t.Log("res=>", res)
+}
