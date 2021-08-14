@@ -45,7 +45,7 @@ func (g *Jbex) GetOneOrder(orderId string, currency CurrencyPair) (*Order, error
 func (g *Jbex) GetUnfinishOrders(currency CurrencyPair) ([]Order, error) {
 	panic("not implement")
 }
-func (g *Jbex) GetOrderHistorys(currency CurrencyPair, currentPage, pageSize int) ([]Order, error) {
+func (g *Jbex) GetOrderHistorys(currency CurrencyPair, opt ...OptionalParameter) ([]Order, error) {
 	panic("not implement")
 }
 func (g *Jbex) GetAccount() (*Account, error) {
@@ -133,7 +133,7 @@ func (g *Jbex) GetDepth(size int, currency CurrencyPair) (*Depth, error) {
   ]
 ]
 */
-func (g *Jbex) GetKlineRecords(currency CurrencyPair, period, size, since int) ([]Kline, error) {
+func (g *Jbex) GetKlineRecords(currency CurrencyPair, period KlinePeriod, size int, optional ...OptionalParameter) ([]Kline, error) {
 	granularity := "SECOND"
 	switch period {
 	case KLINE_PERIOD_1MIN:

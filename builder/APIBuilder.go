@@ -15,8 +15,8 @@ import (
 	"github.com/nntaoli-project/goex/coinbene"
 	"github.com/nntaoli-project/goex/kucoin"
 
-	"github.com/nntaoli-project/goex/jbex"
 	"github.com/nntaoli-project/goex/atop"
+	"github.com/nntaoli-project/goex/jbex"
 	//"github.com/nntaoli-project/goex/coin58"
 	"net"
 	"net/http"
