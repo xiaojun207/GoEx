@@ -119,6 +119,7 @@ var (
 	QUARTER_CONTRACT    = "quarter"    //季度合约
 	BI_QUARTER_CONTRACT = "bi_quarter" // NEXT QUARTER
 	SWAP_CONTRACT       = "swap"       //永续合约
+	SWAP_USDT_CONTRACT  = "swap-usdt"
 )
 
 //exchanges const
@@ -153,6 +154,7 @@ const (
 	BITMEX_TEST     = "testnet.bitmex.com"
 	CRYPTOPIA       = "cryptopia.co.nz"
 	HBDM            = "hbdm.com"
+	HBDM_SWAP       = "hbdm.com_swap"
 	COINBENE        = "coinbene.com"
 	ATOP            = "a.top"
 	BITGET_SWAP     = "bitget_swap"
@@ -168,8 +170,9 @@ const (
 	SPOT_MARGIN //币币杠杆交易
 	WALLET      // 资金账户
 	_
-	TIPS //余币宝
-	SWAP //永续合约
+	TIPS      //余币宝
+	SWAP      //永续合约
+	SWAP_USDT //usdt本位永续合约
 )
 
 type LimitOrderOptionalParameter int
